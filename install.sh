@@ -585,6 +585,50 @@ setup_ssh() {
 }
 
 # ============================================================
+# VMWARE DETECTION
+# ============================================================
+setup_vmware() {
+  if ! systemd-detect-virt --quiet --vm 2>/dev/null | grep -q vmware && \
+     ! grep -qi "vmware" /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+    return
+  fi
+
+  step "VMware guest detected"
+  log info "Installing open-vm-tools and gtkmm3..."
+
+  if run_sudo pacman -S --needed --noconfirm open-vm-tools gtkmm3 &>/dev/null; then
+    log ok "open-vm-tools + gtkmm3 installed"
+  else
+    log error "Failed to install open-vm-tools"
+    return
+  fi
+
+  log info "Enabling VMware services..."
+  run_sudo systemctl enable vmtoolsd.service
+  run_sudo systemctl start  vmtoolsd.service
+  log ok "vmtoolsd enabled"
+
+  run_sudo systemctl enable vmware-vmblock-fuse.service
+  run_sudo systemctl start  vmware-vmblock-fuse.service
+  log ok "vmware-vmblock-fuse enabled"
+
+  # Append vmware-user to bspwmrc (idempotent)
+  BSPWMRC="$HOME/.config/bspwm/bspwmrc"
+  if [[ -f "$BSPWMRC" ]]; then
+    if ! grep -q "vmware-user" "$BSPWMRC"; then
+      echo "" >> "$BSPWMRC"
+      echo "# VMware clipboard & drag-drop" >> "$BSPWMRC"
+      echo "pgrep vmware-user || vmware-user &" >> "$BSPWMRC"
+      log ok "vmware-user added to bspwmrc"
+    else
+      log ok "vmware-user already in bspwmrc — skipping"
+    fi
+  else
+    log warn "bspwmrc not found — will need to add 'pgrep vmware-user || vmware-user &' manually"
+  fi
+}
+
+# ============================================================
 # PACKAGES
 # ============================================================
 PACMAN_PKGS=(
@@ -596,7 +640,7 @@ PACMAN_PKGS=(
   linux linux-firmware mesa xf86-video-amdgpu polybar nodejs npm
 )
 
-YAY_PKGS=( i3lock-color )
+YAY_PKGS=( i3lock-color ttf-hack-nerd )
 
 # ============================================================
 # MAIN
@@ -611,6 +655,7 @@ install_pentest_tools
 setup_services
 setup_zsh
 setup_dotfiles
+setup_vmware
 setup_custom_tools
 setup_wordlists
 setup_aliases
