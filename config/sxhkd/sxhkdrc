@@ -23,10 +23,12 @@ super + Return
 # Editor de configuración (Rice)
 super + r
     RiceEditor
+super + 8
+    kitty --class FloatingTerm --title "HTB NAV" --override initial_window_width=400 --override initial_window_height=300 -e /usr/bin/htb-nav.py
 
 # HTB VPN - Terminal flotante
 super + 9
-    kitty --class FloatingTerm --title "HTB VPN" --override initial_window_width=400 --override initial_window_height=300 -e ~/.config/bspwm/scripts/htb-vpn
+    kitty --class FloatingTerm --title "HTB VPN" --override initial_window_width=400 --override initial_window_height=300 -e /usr/bin/htb-vpn
 
 # ╭──────────────────────────────────────────────╮
 # │                 Capturas                     │
@@ -58,10 +60,6 @@ ctrl + super + alt + {p,r,q,l,k,s}
 # ╭──────────────────────────────────────────────╮
 # │      Control de brillo y volumen             │
 # ╰──────────────────────────────────────────────╯
-
-# Música
-super + 7
-    ~/.config/bspwm/scripts/music
 
 # Brillo
 XF86MonBrightness{Up,Down}

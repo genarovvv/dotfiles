@@ -1,7 +1,6 @@
 #! /bin/sh
-# Author: zurefx
+# Author: z1rov
 
-export PATH="$HOME/.config/bspwm/scripts:$PATH"
 export XDG_CURRENT_DESKTOP='bspwm'
 export _JAVA_AWT_WM_NONREPARENTING=1
 
@@ -32,12 +31,12 @@ bspc config pointer_action2       resize_side
 bspc config pointer_action3       resize_corner
 bspc config border_width          0
 bspc rule -a FloatingTerm state=floating center=true
-bspc config external_rules_command "${HOME}/.config/bspwm/scripts/rules"
+bspc config external_rules_command "/usr/bin/rules"
 bspc rule -a kitty:FloatingTerm state=floating center=true
 
 
-"$HOME/.config/bspwm/scripts/workspaces"
-"$HOME/.config/bspwm/scripts/targetip"
+"/usr/bin/workspaces"
+"/usr/bin/targetip"
 
 pgrep -x dunst >/dev/null || dunst &
 
@@ -50,9 +49,5 @@ feh --bg-fill "${HOME}/.config/wallpapers/img${WALLPAPER_NUM}.png"
 polybar -c ~/.config/polybar/config.ini envertex-bar &
 
 
-~/.config/bspwm/scripts/battery-check &
+/usr/bin/battery-check &
 
-rm -f \
-  "$HOME/.zsh_history" \
-  "$HOME/.bash_history" \
-  "$HOME/.local/share/fish/fish_history" 2>/dev/null
