@@ -1,7 +1,7 @@
 #!/bin/sh
 # Author: g3k
 
-ICON_DIR="$HOME/.config/bspwm/scripts/images"
+ICON_DIR="$HOME/.config/images"
 VOL_ICON="$ICON_DIR/vol.png"
 MUTE_ICON="$ICON_DIR/mute.png"
 

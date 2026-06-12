@@ -1,9 +1,9 @@
 #!/bin/bash
-# Author: g3k
+# Author: z1rov
 
-SRC_DIR="$HOME/.config/bspwm/scripts/src"
+SRC_DIR="$HOME/.config/vpn"
 LOGFILE="$HOME/.vpn.log"
-ICON="$HOME/.config/bspwm/scripts/images/htb.png"
+ICON="$HOME/.config/images/htb.png"
 TIMEOUT=15
 
 notify() { dunstify -u "$1" -r 9999 -i "$ICON" "$2" "$3"; }

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Author: g3k
-ipaddr=$(~/.config/bspwm/scripts/net-polybar | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+# Author: z1rov
+
+ipaddr=$(/usr/bin/net-polybar | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 
 [[ -n "$ipaddr" ]] && echo -n "$ipaddr" | xclip -selection clipboard
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Author: g3k
 
-ICON_PATH="$HOME/.config/bspwm/scripts/images/brightness.png"
+ICON_PATH="$HOME/.config/images/brightness.png"
 STEP=5
 LIMIT=2
 NOTIFY_ID=5555
