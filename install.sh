@@ -633,7 +633,7 @@ setup_vmware() {
 # ============================================================
 PACMAN_PKGS=(
   xorg xorg-xinit bspwm sxhkd picom feh lxdm
-  kitty zsh tmux neovim rofi thunar gvfs
+  kitty zsh tmux neovim rofi thunar gvfs ttf-jetbrains-mono
   bat eza xclip brightnessctl pamixer firefox
   pipewire pipewire-pulse wireplumber papirus-icon-theme
   dunst flameshot gnome-themes-extra
