@@ -147,138 +147,119 @@ setup_yay() {
 }
 
 # ============================================================
-# BLACKARCH
+# DOCKER
 # ============================================================
-setup_blackarch() {
+setup_docker() {
+  step "Docker"
+
+  if command -v docker &>/dev/null; then
+    log ok "docker already installed — skipping"
+  else
+    log info "Installing docker..."
+    if run_sudo pacman -S --needed --noconfirm docker docker-compose &>/dev/null; then
+      log ok "docker installed"
+    else
+      log error "Failed to install docker"
+      return
+    fi
+  fi
+
+  run_sudo systemctl enable --now docker
+  log ok "docker service enabled"
+
+  if ! getent group docker | grep -q "\b${USER_NAME}\b"; then
+    run_sudo usermod -aG docker "$USER_NAME"
+    log ok "$USER_NAME added to docker group"
+  else
+    log ok "$USER_NAME already in docker group — skipping"
+  fi
+}
+
+# ============================================================
+# EXEGOL + HTB-OPERATOR
+# ============================================================
+setup_exegol() {
+  step "Exegol + htb-operator"
+
+  # pipx dependency
+  if ! command -v pipx &>/dev/null; then
+    log info "Installing python-pipx..."
+    run_sudo pacman -S --needed --noconfirm python-pipx &>/dev/null || {
+      log error "Failed to install python-pipx"
+      return
+    }
+    pipx ensurepath &>/dev/null || true
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+
+  # exegol wrapper
+  if pipx list 2>/dev/null | grep -q "exegol"; then
+    log ok "exegol wrapper already installed — skipping"
+  else
+    log info "Installing exegol wrapper via pipx..."
+    if pipx install exegol &>/dev/null; then
+      log ok "exegol wrapper installed"
+    else
+      log error "Failed to install exegol wrapper"
+      return
+    fi
+  fi
+
+  # htb-operator
+  if pipx list 2>/dev/null | grep -q "htb-operator"; then
+    log ok "htb-operator already installed — skipping"
+  else
+    log info "Installing htb-operator..."
+    if pipx install htb-operator &>/dev/null; then
+      log ok "htb-operator installed"
+    else
+      log error "Failed to install htb-operator"
+    fi
+  fi
+
+  # pull image
   banner
-  read -rp "Install BlackArch repositories? (Y/n): " ans
+  read -rp "Pull Exegol image now? This can be large (full ~25GB / light ~8GB). (Y/n): " ans
   ans=${ans,,}
-  [[ -n "$ans" && "$ans" != "y" && "$ans" != "yes" ]] && {
-    log info "Skipping BlackArch"
-    return
-  }
+  if [[ -z "$ans" || "$ans" == "y" || "$ans" == "yes" ]]; then
+    echo -e "\nChoose Exegol image:\n  1) full   — all tools (~25 GB)\n  2) light  — common tools (~8 GB)\n  3) ad     — Active Directory focused\n  4) web    — Web pentesting focused\n  5) skip   — pull later manually"
+    read -rp "Select [2]: " img_choice
+    case "${img_choice:-2}" in
+      1) EXEGOL_IMAGE="full" ;;
+      3) EXEGOL_IMAGE="ad" ;;
+      4) EXEGOL_IMAGE="web" ;;
+      5) log info "Skipping image pull — run 'exegol install' later"; return ;;
+      *) EXEGOL_IMAGE="light" ;;
+    esac
 
-  step "Setting up BlackArch"
-
-  if grep -q "\[blackarch\]" /etc/pacman.conf 2>/dev/null; then
-    log ok "BlackArch repo already present — skipping"
-    return
-  fi
-
-  log info "Downloading BlackArch strap..."
-  TMP_STRAP="$(mktemp)"
-  curl -fsSL https://blackarch.org/strap.sh -o "$TMP_STRAP"
-
-  log info "Verifying SHA1..."
-  EXPECTED="5ea40d49ecd14c2e024deecf90605426db97ea0c"
-  ACTUAL="$(sha1sum "$TMP_STRAP" | cut -d' ' -f1)"
-
-  if [[ "$ACTUAL" != "$EXPECTED" ]]; then
-    log error "SHA1 mismatch! Expected: $EXPECTED | Got: $ACTUAL"
-    log error "Aborting BlackArch setup for security reasons"
-    rm -f "$TMP_STRAP"
-    return
-  fi
-
-  chmod +x "$TMP_STRAP"
-  run_sudo bash "$TMP_STRAP"
-  rm -f "$TMP_STRAP"
-
-  run_sudo pacman -Syyu --noconfirm
-  log ok "BlackArch repositories added"
-}
-
-# ============================================================
-# BLACKARCH-ONLY TOOLS (sliver, bloodhound)
-# ============================================================
-install_blackarch_tools() {
-  step "BlackArch tools"
-
-  BLACKARCH_TOOLS=(sliver bloodhound)
-  for tool in "${BLACKARCH_TOOLS[@]}"; do
-    log info "Installing $tool..."
-    if pacman -Qi "$tool" &>/dev/null; then
-      log ok "$tool already installed — skipping"
-    elif run_sudo pacman -S --needed --noconfirm "$tool" &>/dev/null; then
-      log ok "$tool installed"
+    log info "Pulling exegol/$EXEGOL_IMAGE — this will take a while..."
+    if exegol install "$EXEGOL_IMAGE"; then
+      log ok "exegol/$EXEGOL_IMAGE ready"
     else
-      log error "Failed to install $tool"
-    fi
-  done
-}
-
-# ============================================================
-# PENTEST TOOLS
-# ============================================================
-install_python() {
-  step "Python"
-  log info "Installing Python 3..."
-  if run_sudo pacman -S --noconfirm python python-pip &>/dev/null; then
-    log ok "python3 installed"
-  else
-    log error "Failed to install python3"
-  fi
-
-  log info "Installing Python 2..."
-  if run_sudo pacman -S --noconfirm python2 &>/dev/null; then
-    log ok "python2 installed"
-    if ! command -v pip2 &>/dev/null; then
-      log info "Bootstrapping pip2..."
-      curl -sS https://bootstrap.pypa.io/pip/2.7/get-pip.py -o /tmp/get-pip2.py
-      python2 /tmp/get-pip2.py &>/dev/null && log ok "pip2 installed" || log warn "pip2 bootstrap failed"
+      log error "Failed to pull exegol/$EXEGOL_IMAGE"
+      log warn "Run manually: exegol install $EXEGOL_IMAGE"
     fi
   else
-    log warn "python2 not available (expected on newer Arch)"
+    log info "Skipping image pull — run 'exegol install <image>' later"
   fi
-}
 
-install_pentest_tools() {
-  step "Pentest tools"
-  TOOLS=(
-    nmap hashcat ffuf feroxbuster git wget curl sqlmap whatweb netcat
-    john obsidian unzip burpsuite gobuster wfuzz nikto sslscan
-    smbclient freerdp rdesktop proxychains-ng responder enum4linux
-    smbmap ldns
-  )
-  for tool in "${TOOLS[@]}"; do
-    log info "Installing $tool..."
-    if pacman -Qi "$tool" &>/dev/null; then
-      log ok "$tool already installed — skipping"
-    elif run_sudo pacman -S --noconfirm "$tool" &>/dev/null; then
-      log ok "$tool installed"
-    else
-      log warn "$tool not found in repos (may need BlackArch or AUR)"
-    fi
-  done
-}
+  # aliases
+  SHELL_RC="$HOME/.zshrc"
+  [[ ! -f "$SHELL_RC" ]] && touch "$SHELL_RC"
 
-# ============================================================
-# PIPX TOOLS (AD / HTB)
-# ============================================================
-install_pipx_tools() {
-  step "Pipx tools"
-
-  log info "Installing python-pipx..."
-  if run_sudo pacman -S --needed --noconfirm python-pipx &>/dev/null; then
-    log ok "python-pipx installed"
+  if ! grep -q "alias exegol=" "$SHELL_RC" 2>/dev/null; then
+    {
+      echo ""
+      echo "# ── exegol ──"
+      echo "alias exegol='sudo -E \$(which exegol)'"
+    } >> "$SHELL_RC"
+    log ok "exegol alias written to $SHELL_RC"
   else
-    log error "Failed to install python-pipx"
-    return
+    log ok "exegol alias already present — skipping"
   fi
 
-  pipx ensurepath &>/dev/null || true
-
-  PIPX_TOOLS=(htb-operator bloodyad certipy-ad netexec ldapdomaindump)
-  for tool in "${PIPX_TOOLS[@]}"; do
-    log info "Installing $tool..."
-    if pipx list 2>/dev/null | grep -q "$tool"; then
-      log ok "$tool already installed — skipping"
-    elif pipx install "$tool" &>/dev/null; then
-      log ok "$tool installed"
-    else
-      log error "Failed to install $tool"
-    fi
-  done
+  log ok "Exegol + htb-operator setup complete"
+  log warn "Log out and back in (or 'newgrp docker') for docker group to take effect"
 }
 
 # ============================================================
@@ -338,13 +319,11 @@ setup_dotfiles() {
 
   mkdir -p "$HOME/.config"
 
-  # config/
   [[ -d "$DOTDIR/config" ]] && {
     cp -r "$DOTDIR/config/"* "$HOME/.config/"
     log ok "config/ deployed to ~/.config/"
   }
 
-  # home/
   [[ -f "$DOTDIR/home/.zshrc" ]] && {
     cp "$DOTDIR/home/.zshrc" "$HOME/"
     log ok ".zshrc deployed"
@@ -358,7 +337,6 @@ setup_dotfiles() {
     log ok ".local deployed"
   }
 
-  # bin/ → /usr/bin/
   if [[ -d "$DOTDIR/bin" ]]; then
     log info "Deploying bin/ to /usr/bin/..."
     while IFS= read -r -d '' binfile; do
@@ -373,171 +351,11 @@ setup_dotfiles() {
     done < <(find "$DOTDIR/bin" -maxdepth 1 -type f -print0)
   fi
 
-  # bspwm permissions
   [[ -f "$HOME/.config/bspwm/bspwmrc" ]] && chmod +x "$HOME/.config/bspwm/bspwmrc"
   [[ -d "$HOME/.config/bspwm/scripts" ]] && find "$HOME/.config/bspwm/scripts" -type f -exec chmod 755 {} \;
 
   mkdir -p "$HOME/Documents" "$HOME/Downloads" "$HOME/CTF"
   log ok "Dotfiles deployed"
-}
-
-# ============================================================
-# CUSTOM TOOLS (pivoting + AD)
-# ============================================================
-setup_custom_tools() {
-  step "Custom tools (z1rov repos)"
-
-  log info "Cloning z1rov/pivoting-tools..."
-  TMP_PIVOT="$(mktemp -d)"
-  if git clone -q https://github.com/z1rov/pivoting-tools "$TMP_PIVOT"; then
-    while IFS= read -r -d '' tool_dir; do
-      dname=$(basename "$tool_dir")
-      [[ "$dname" == .* ]] && continue
-      dst="/usr/share/$dname"
-      run_sudo mkdir -p "$dst"
-      run_sudo cp -r "$tool_dir/." "$dst/"
-      log ok "pivoting-tools/$dname → $dst"
-    done < <(find "$TMP_PIVOT" -mindepth 1 -maxdepth 1 -type d -print0)
-    rm -rf "$TMP_PIVOT"
-    log ok "pivoting-tools deployed"
-  else
-    log error "Failed to clone pivoting-tools"
-  fi
-
-  log info "Cloning z1rov/active-directory-tools..."
-  TMP_AD="$(mktemp -d)"
-  if git clone -q https://github.com/z1rov/active-directory-tools "$TMP_AD"; then
-    while IFS= read -r -d '' tool_dir; do
-      dname=$(basename "$tool_dir")
-      [[ "$dname" == .* ]] && continue
-      dst="/usr/share/$dname"
-      run_sudo mkdir -p "$dst"
-      run_sudo cp -r "$tool_dir/." "$dst/"
-      log ok "active-directory-tools/$dname → $dst"
-    done < <(find "$TMP_AD" -mindepth 1 -maxdepth 1 -type d -print0)
-    rm -rf "$TMP_AD"
-    log ok "active-directory-tools deployed"
-  else
-    log error "Failed to clone active-directory-tools"
-  fi
-
-  log info "Cloning z1rov/tools → /usr/local/bin..."
-  TMP_TOOLS="$(mktemp -d)"
-  if git clone -q https://github.com/z1rov/tools "$TMP_TOOLS"; then
-    while IFS= read -r -d '' bin; do
-      bname=$(basename "$bin")
-      [[ "$bname" == .* || "$bname" == README* || "$bname" == LICENSE* ]] && continue
-      [[ ! -f "$bin" ]] && continue
-      if run_sudo cp "$bin" "/usr/local/bin/$bname" && run_sudo chmod +x "/usr/local/bin/$bname"; then
-        log ok "$bname → /usr/local/bin/$bname"
-      else
-        log error "Failed to deploy $bname"
-      fi
-    done < <(find "$TMP_TOOLS" -maxdepth 1 -type f -print0)
-    rm -rf "$TMP_TOOLS"
-    log ok "z1rov/tools deployed"
-  else
-    log error "Failed to clone z1rov/tools"
-  fi
-}
-
-# ============================================================
-# WORDLISTS
-# ============================================================
-setup_wordlists() {
-  step "Wordlists"
-  WDIR="/usr/share/wordlists"
-  run_sudo mkdir -p "$WDIR"
-
-  log info "Cloning SecLists..."
-  if [[ -d /usr/share/seclists/.git ]]; then
-    run_sudo git -C /usr/share/seclists pull -q
-    log ok "SecLists updated"
-  elif run_sudo git clone -q --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists; then
-    log ok "SecLists cloned"
-  else
-    log error "Failed to clone SecLists"
-  fi
-
-  log info "Cloning z1rov/wordlists..."
-  TMP_WL="$(mktemp -d)"
-  if git clone -q https://github.com/z1rov/wordlists "$TMP_WL"; then
-    for file in "$TMP_WL"/*; do
-      fname=$(basename "$file")
-      [[ "$fname" == README* || "$fname" == .* ]] && continue
-      case "$fname" in
-        *.zip)
-          dest_name="${fname%.zip}"
-          run_sudo mkdir -p "$WDIR/$dest_name"
-          run_sudo unzip -o "$file" -d "$WDIR/$dest_name/" &>/dev/null
-          nested=$(find "$WDIR/$dest_name" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
-          if [[ $(echo "$nested" | grep -c .) -eq 1 ]] && \
-             [[ -z "$(find "$WDIR/$dest_name" -mindepth 1 -maxdepth 1 -type f 2>/dev/null)" ]]; then
-            run_sudo mv "$nested"/* "$WDIR/$dest_name/" 2>/dev/null || true
-            run_sudo rmdir "$nested" 2>/dev/null || true
-          fi
-          log ok "$fname extracted"
-          ;;
-        *.tar.gz|*.tgz)
-          dest_name="${fname%.tar.gz}"; dest_name="${dest_name%.tgz}"
-          run_sudo mkdir -p "$WDIR/$dest_name"
-          run_sudo tar -xzf "$file" -C "$WDIR/$dest_name/" &>/dev/null
-          log ok "$fname extracted"
-          ;;
-        *.gz)
-          dest_name="${fname%.gz}"
-          run_sudo bash -c "gunzip -c '$file' > '$WDIR/$dest_name'" 2>/dev/null
-          [[ -d "$WDIR/$dest_name" ]] && run_sudo rm -rf "$WDIR/$dest_name"
-          log ok "$fname decompressed"
-          ;;
-        *)
-          run_sudo cp "$file" "$WDIR/" 2>/dev/null
-          log ok "$fname copied"
-          ;;
-      esac
-    done
-
-    # Fix rockyou if extracted as dir
-    if [[ -d "$WDIR/rockyou.txt" ]]; then
-      INNER=$(find "$WDIR/rockyou.txt" -type f | head -1)
-      if [[ -n "$INNER" ]]; then
-        run_sudo mv "$INNER" "$WDIR/rockyou.txt.tmp"
-        run_sudo rm -rf "$WDIR/rockyou.txt"
-        run_sudo mv "$WDIR/rockyou.txt.tmp" "$WDIR/rockyou.txt"
-        log ok "rockyou.txt fixed"
-      fi
-    fi
-
-    rm -rf "$TMP_WL"
-    log ok "Wordlists ready at $WDIR"
-  else
-    log error "Failed to clone z1rov/wordlists"
-  fi
-}
-
-# ============================================================
-# ALIASES
-# ============================================================
-setup_aliases() {
-  step "Aliases"
-  SHELL_RC="$HOME/.zshrc"
-  [[ ! -f "$SHELL_RC" ]] && touch "$SHELL_RC"
-
-  MARKER="# ── z1rov pentest aliases ──"
-  grep -q "$MARKER" "$SHELL_RC" 2>/dev/null && \
-    sed -i "/$MARKER/,/# ── end z1rov aliases ──/d" "$SHELL_RC"
-
-  {
-    echo ""
-    echo "# ── z1rov pentest aliases ──"
-    [[ -d /usr/share/wordlists ]]   && echo "alias wordlists='cd /usr/share/wordlists && ls'"
-    [[ -d /usr/share/seclists ]]    && echo "alias seclists='cd /usr/share/seclists && ls'"
-    [[ -d /usr/share/pivoting-tools ]] && echo "alias pivoting='cd /usr/share/pivoting-tools && ls'"
-    [[ -d /usr/share/active-directory-tools ]] && echo "alias adtools='cd /usr/share/active-directory-tools && ls'"
-    echo "# ── end z1rov aliases ──"
-  } >> "$SHELL_RC"
-
-  log ok "Aliases written to $SHELL_RC"
 }
 
 # ============================================================
@@ -659,7 +477,6 @@ setup_vmware() {
     return
   fi
 
-  log info "Enabling VMware services..."
   run_sudo systemctl enable vmtoolsd.service
   run_sudo systemctl start  vmtoolsd.service
   log ok "vmtoolsd enabled"
@@ -668,7 +485,6 @@ setup_vmware() {
   run_sudo systemctl start  vmware-vmblock-fuse.service
   log ok "vmware-vmblock-fuse enabled"
 
-  # Append vmware-user to bspwmrc (idempotent)
   BSPWMRC="$HOME/.config/bspwm/bspwmrc"
   if [[ -f "$BSPWMRC" ]]; then
     if ! grep -q "vmware-user" "$BSPWMRC"; then
@@ -705,18 +521,12 @@ setup_sudo
 setup_yay
 install_pacman "${PACMAN_PKGS[@]}"
 install_yay "${YAY_PKGS[@]}"
-setup_blackarch
-install_blackarch_tools
-install_python
-install_pentest_tools
-install_pipx_tools
+setup_docker
+setup_exegol
 setup_services
 setup_zsh
 setup_dotfiles
 setup_vmware
-setup_custom_tools
-setup_wordlists
-setup_aliases
 setup_root
 setup_ssh
 
