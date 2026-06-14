@@ -176,12 +176,11 @@ setup_docker() {
 }
 
 # ============================================================
-# EXEGOL + HTB-OPERATOR
+# HTB-OPERATOR
 # ============================================================
-setup_exegol() {
-  step "Exegol + htb-operator"
+setup_htb_operator() {
+  step "htb-operator"
 
-  # pipx dependency
   if ! command -v pipx &>/dev/null; then
     log info "Installing python-pipx..."
     run_sudo pacman -S --needed --noconfirm python-pipx &>/dev/null || {
@@ -192,20 +191,6 @@ setup_exegol() {
     export PATH="$HOME/.local/bin:$PATH"
   fi
 
-  # exegol wrapper
-  if pipx list 2>/dev/null | grep -q "exegol"; then
-    log ok "exegol wrapper already installed — skipping"
-  else
-    log info "Installing exegol wrapper via pipx..."
-    if pipx install exegol &>/dev/null; then
-      log ok "exegol wrapper installed"
-    else
-      log error "Failed to install exegol wrapper"
-      return
-    fi
-  fi
-
-  # htb-operator
   if pipx list 2>/dev/null | grep -q "htb-operator"; then
     log ok "htb-operator already installed — skipping"
   else
@@ -216,50 +201,6 @@ setup_exegol() {
       log error "Failed to install htb-operator"
     fi
   fi
-
-  # pull image
-  banner
-  read -rp "Pull Exegol image now? This can be large (full ~25GB / light ~8GB). (Y/n): " ans
-  ans=${ans,,}
-  if [[ -z "$ans" || "$ans" == "y" || "$ans" == "yes" ]]; then
-    echo -e "\nChoose Exegol image:\n  1) full   — all tools (~25 GB)\n  2) light  — common tools (~8 GB)\n  3) ad     — Active Directory focused\n  4) web    — Web pentesting focused\n  5) skip   — pull later manually"
-    read -rp "Select [2]: " img_choice
-    case "${img_choice:-2}" in
-      1) EXEGOL_IMAGE="full" ;;
-      3) EXEGOL_IMAGE="ad" ;;
-      4) EXEGOL_IMAGE="web" ;;
-      5) log info "Skipping image pull — run 'exegol install' later"; return ;;
-      *) EXEGOL_IMAGE="light" ;;
-    esac
-
-    log info "Pulling exegol/$EXEGOL_IMAGE — this will take a while..."
-    if exegol install "$EXEGOL_IMAGE"; then
-      log ok "exegol/$EXEGOL_IMAGE ready"
-    else
-      log error "Failed to pull exegol/$EXEGOL_IMAGE"
-      log warn "Run manually: exegol install $EXEGOL_IMAGE"
-    fi
-  else
-    log info "Skipping image pull — run 'exegol install <image>' later"
-  fi
-
-  # aliases
-  SHELL_RC="$HOME/.zshrc"
-  [[ ! -f "$SHELL_RC" ]] && touch "$SHELL_RC"
-
-  if ! grep -q "alias exegol=" "$SHELL_RC" 2>/dev/null; then
-    {
-      echo ""
-      echo "# ── exegol ──"
-      echo "alias exegol='sudo -E \$(which exegol)'"
-    } >> "$SHELL_RC"
-    log ok "exegol alias written to $SHELL_RC"
-  else
-    log ok "exegol alias already present — skipping"
-  fi
-
-  log ok "Exegol + htb-operator setup complete"
-  log warn "Log out and back in (or 'newgrp docker') for docker group to take effect"
 }
 
 # ============================================================
@@ -496,7 +437,7 @@ setup_vmware() {
       log ok "vmware-user already in bspwmrc — skipping"
     fi
   else
-    log warn "bspwmrc not found — will need to add 'pgrep vmware-user || vmware-user &' manually"
+    log warn "bspwmrc not found — add 'pgrep vmware-user || vmware-user &' manually"
   fi
 }
 
@@ -522,7 +463,7 @@ setup_yay
 install_pacman "${PACMAN_PKGS[@]}"
 install_yay "${YAY_PKGS[@]}"
 setup_docker
-setup_exegol
+setup_htb_operator
 setup_services
 setup_zsh
 setup_dotfiles
