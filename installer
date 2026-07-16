@@ -478,7 +478,10 @@ _install_bloodhound() {
 }
 
 _setup_display_manager() {
-  if systemctl is-enabled ly &>/dev/null || systemctl is-active ly &>/dev/null; then
+  local ly_tty="tty2"
+
+  if systemctl is-enabled ly &>/dev/null || systemctl is-active ly &>/dev/null || \
+     systemctl is-enabled "ly@${ly_tty}.service" &>/dev/null || systemctl is-active "ly@${ly_tty}.service" &>/dev/null; then
     _ok "ly already enabled"
     return
   fi
@@ -491,7 +494,42 @@ _setup_display_manager() {
     fi
   done
 
-  sudo systemctl enable ly &>>"$LOGFILE" && _ok "ly enabled" || _err "ly enable failed"
+  if ! pacman -Qi ly &>/dev/null; then
+    _err "ly package is not installed, cannot enable service"
+    return
+  fi
+
+  sudo systemctl daemon-reload &>>"$LOGFILE" || true
+
+  local ly_unit=""
+  if [[ -f /usr/lib/systemd/system/ly.service || -f /etc/systemd/system/ly.service ]]; then
+    ly_unit="ly.service"
+  elif [[ -f /usr/lib/systemd/system/ly@.service || -f /etc/systemd/system/ly@.service ]]; then
+    ly_unit="ly@${ly_tty}.service"
+  else
+    _err "no ly systemd unit found on disk (checked ly.service and ly@.service)"
+    return
+  fi
+
+  local enable_out
+  if enable_out="$(sudo systemctl enable "$ly_unit" 2>&1)"; then
+    echo "$enable_out" >>"$LOGFILE"
+    _ok "$ly_unit enabled"
+  else
+    echo "$enable_out" >>"$LOGFILE"
+    _err "ly enable failed: $(echo "$enable_out" | tr '\n' ' ')"
+    return
+  fi
+
+  if [[ "$ly_unit" == "ly@${ly_tty}.service" ]]; then
+    if systemctl is-enabled "getty@${ly_tty}.service" &>/dev/null; then
+      if sudo systemctl disable --now "getty@${ly_tty}.service" &>>"$LOGFILE"; then
+        _ok "getty@${ly_tty}.service disabled (was conflicting with ly)"
+      else
+        _err "failed to disable getty@${ly_tty}.service, ly may not start on ${ly_tty}"
+      fi
+    fi
+  fi
 }
 
 _setup_services() {
@@ -906,6 +944,13 @@ _diagnose() {
   for bin in bspwm sxhkd kitty picom polybar rofi feh ly thunar tmux nvim dunst firefox node yay zsh docker burpsuite openvpn fastfetch; do
     _check_binary "$bin"
   done
+
+  if systemctl is-enabled ly &>/dev/null || systemctl is-active ly &>/dev/null || \
+     systemctl is-enabled "ly@tty2.service" &>/dev/null || systemctl is-active "ly@tty2.service" &>/dev/null; then
+    _ok "ly service enabled"
+  else
+    _err "ly service not enabled, run: installer setup"
+  fi
 
   if [[ -f "$HOME/.xinitrc" ]] && grep -q "exec bspwm" "$HOME/.xinitrc"; then
     _ok ".xinitrc points to bspwm"
